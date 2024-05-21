@@ -5,11 +5,14 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.db import IntegrityError
 from .serializers import *
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from rest_framework.decorators import api_view,permission_classes
 from django.http import HttpResponse, HttpResponseNotAllowed
+from django.middleware.csrf import get_token
+
 
 
 
@@ -92,3 +95,57 @@ def api_file_delete(request, pk):
     file = get_object_or_404(FileUpload, pk=pk, user=request.user)
     file.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_register(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+    firstname = request.data.get('firstname')
+    lastname = request.data.get('lastname')
+    email = request.data.get('email')
+    
+    if username and password and email:
+        try:
+            user = CustomUser.objects.create_user(
+                username=username, 
+                password=password, 
+                email=email,
+                firstname=firstname,
+                lastname=lastname
+            )
+            login(request, user)
+            serializer = CustomUserSerializer(user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except IntegrityError:
+            return Response({'error': 'A user with that username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response({'error': 'Username, password, and email are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_login(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+    user = authenticate(request, username=username, password=password)
+    if user is not None:
+        login(request, user)
+        serializer = CustomUserSerializer(user)
+        return Response(serializer.data)
+    return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_logout(request):
+    logout(request)
+    return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_csrf_token(request):
+    csrf_token = get_token(request)
+    return Response({'csrfToken': csrf_token}, status=status.HTTP_200_OK)
