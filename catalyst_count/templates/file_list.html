@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>File List</title>
+</head>
+<body>
+    <h1>File List</h1>
+    {% if request.user.is_authenticated %}
+    <h1>Hi {{request.user}} !</h1>
+
+    {% endif %}
+    <a href="{% url 'logout' %}">Logout</a>
+    <ul>
+        {% for file in files %}
+        <li>
+            <a href="{{ file.file.url }}" download>{{ file.file.name }}</a>
+            <form action="{% url 'file_delete' file.pk %}" method="post" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit">Delete</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    <h2>Upload a new file</h2>
+    <form action="{% url 'file_upload' %}" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+</body>
+</html>
