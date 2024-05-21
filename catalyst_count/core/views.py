@@ -16,6 +16,12 @@ from django.middleware.csrf import get_token
 
 
 
+def all_users(request):
+    all_users = CustomUser.objects.all()
+    data = {"users":all_users}
+    return render(request,'all_users.html',context=data)
+
+
 def register(request):
     if request.method == 'POST':
         username = request.POST.get('username')
