@@ -183,15 +183,15 @@ def query_builder(request):
 #     serializer = CompanySerializer(files, many=True)
 #     return Response(serializer.data)
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def api_file_upload(request):
-    if 'file' in request.FILES:
-        file = request.FILES['file']
-        file_upload = Company.objects.create(user=request.user, file=file)
-        serializer = CompanySerializer(file_upload)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response({'error': 'File not provided'}, status=status.HTTP_400_BAD_REQUEST)
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+# def api_file_upload(request):
+#     if 'file' in request.FILES:
+#         file = request.FILES['file']
+#         file_upload = Company.objects.create(user=request.user, file=file)
+#         serializer = CompanySerializer(file_upload)
+#         return Response(serializer.data, status=status.HTTP_201_CREATED)
+#     return Response({'error': 'File not provided'}, status=status.HTTP_400_BAD_REQUEST)
 
 # @api_view(['DELETE'])
 # @permission_classes([IsAuthenticated])
@@ -253,3 +253,117 @@ def api_logout(request):
 def get_csrf_token(request):
     csrf_token = get_token(request)
     return Response({'csrfToken': csrf_token}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_file_upload(request):
+    if request.method == 'POST' and request.FILES.get('file'):
+        file = request.FILES['file']
+        
+        # Check if the file is a CSV
+        if not file.name.endswith('.csv'):
+            return Response({'error': 'File is not a CSV'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Define a temporary file path on the U drive
+        upload_dir = 'U:/django/catalyst_count/media/uploads'
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+        
+        destination = os.path.join(upload_dir, file.name)
+
+        # Write the uploaded file to the destination file
+        with open(destination, 'wb+') as destination_file:
+            for chunk in file.chunks():
+                destination_file.write(chunk)
+
+        # Process the uploaded CSV file
+        try:
+            with open(destination, 'r', encoding='utf-8') as csv_file:
+                reader = csv.DictReader(csv_file)
+                companies = []
+                for row in reader:
+                    # Extract data from each row and create a new Company instance
+                    locality = row.get('locality', '')
+                    if locality:
+                        city_state = locality.split(',')[:2]
+                        city = city_state[0].strip() if len(city_state) > 0 else 'Unknown'
+                        state = city_state[1].strip() if len(city_state) > 1 else 'Unknown'
+                    else:
+                        city = 'Unknown'
+                        state = 'Unknown'
+
+                    # Convert year founded to integer
+                    try:
+                        year_founded = int(float(row.get('year founded', 0)))
+                    except ValueError:
+                        year_founded = 2021  # default year if conversion fails  
+
+                    company_data = {
+                        'user': request.user.id,
+                        'name': row.get('name', 'Unknown'),
+                        'domain': row.get('domain', 'Unknown'),
+                        'year': year_founded,
+                        'industry': row.get('industry', 'UNKNOWN'),
+                        'size_range': row.get('size range', 'Unknown'),
+                        'city': city,
+                        'state': state,
+                        'country': row.get('country', 'Unknown'),
+                        'linkedin_url': row.get('linkedin url', 'Unknown'),
+                        'current_employee_estimate': row.get('current employee estimate'),
+                        'total_employee_estimate': row.get('total employee estimate')
+                    }
+                    
+                    serializer = CompanySerializer(data=company_data)
+                    if serializer.is_valid():
+                        serializer.save()
+                        companies.append(serializer.data)
+                    else:
+                        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        finally:
+            # Delete the temporary file after processing
+            if os.path.exists(destination):
+                os.remove(destination)
+
+        # Redirect to file_list after processing
+        return Response(companies, status=status.HTTP_201_CREATED)
+
+    # If request is not POST or file is not present, return method not allowed
+    return Response({'error': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_query_builder(request):
+    industry = request.GET.get('industry')
+    year = request.GET.get('year')
+    city = request.GET.get('city')
+    state = request.GET.get('state')
+    country = request.GET.get('country')
+    employees_from = request.GET.get('employees_from')
+    employees_to = request.GET.get('employees_to')
+
+    companies = Company.objects.all()
+
+    if industry:
+        companies = companies.filter(industry__icontains=industry)
+    if year:
+        companies = companies.filter(year=year)
+    if city:
+        companies = companies.filter(city__icontains=city)
+    if state:
+        companies = companies.filter(state__icontains=state)
+    if country:
+        companies = companies.filter(country__icontains=country)
+    if employees_from:
+        companies = companies.filter(current_employee_estimate__gte=employees_from)
+    if employees_to:
+        companies = companies.filter(current_employee_estimate__lte=employees_to)
+
+    serializer = CompanySerializer(companies, many=True)
+    return Response({'count': companies.count(), 'companies': serializer.data}, status=status.HTTP_200_OK)

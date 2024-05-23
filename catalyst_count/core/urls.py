@@ -11,6 +11,7 @@ urlpatterns = [
     path('all_users',views.all_users,name="all_users"),
     # path('api/files/', views.api_file_list, name='api_file_list'),
     path('api/upload/', views.api_file_upload, name='api_file_upload'),
+    path('api/query-builder/', views.api_query_builder, name='api_query_builder'),
     # path('api/delete/<int:pk>/', views.api_file_delete, name='api_file_delete'),
      path('api/register/', views.api_register, name='api_register'),
     path('api/login/', views.api_login, name='api_login'),
