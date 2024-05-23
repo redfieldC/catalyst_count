@@ -1,6 +1,6 @@
 # myapp/serializers.py
 from rest_framework import serializers
-from .models import CustomUser, FileUpload
+from .models import CustomUser, Company
 
 
 
@@ -9,7 +9,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ['id', 'username', 'firstname', 'lastname', 'email']
 
-class FileUploadSerializer(serializers.ModelSerializer):
+class CompanySerializer(serializers.ModelSerializer):
     class Meta:
-        model = FileUpload
-        fields = ['id', 'user', 'file', 'uploaded_at']
+        model = Company
+        fields = '__all__'

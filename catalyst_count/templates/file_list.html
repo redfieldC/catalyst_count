@@ -15,20 +15,13 @@
             <h2 class="mb-4">Hi, {{ request.user }}!</h2>
         {% endif %}
         <a href="{% url 'all_users' %}" class="btn btn-primary">All Users List</a>
+        <a href="{% url 'query_builder' %}" class="btn btn-secondary">Query Builder</a>
         
         <a href="{% url 'logout' %}" class="btn btn-danger mb-4">Logout</a>
 
-        <ul class="list-group mb-4">
-            {% for file in files %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <a href="{{ file.file.url }}" download>{{ file.file.name }}</a>
-                    <form action="{% url 'file_delete' file.pk %}" method="post" style="display:inline;">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                    </form>
-                </li>
-            {% endfor %}
-        </ul>
+        <!-- <ul class="list-group mb-4">
+            
+        </ul> -->
 
         <h2 class="mb-4">Upload a new file</h2>
         <form action="{% url 'file_upload' %}" method="post" enctype="multipart/form-data" class="mb-4" id="uploadForm">

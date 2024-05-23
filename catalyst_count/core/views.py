@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, HttpResponseNotAllowed
-from .models import FileUpload,CustomUser
+from .models import Company,CustomUser
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.db import IntegrityError
@@ -12,7 +12,10 @@ from rest_framework.permissions import IsAuthenticated,AllowAny
 from rest_framework.decorators import api_view,permission_classes
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.middleware.csrf import get_token
-
+import csv
+from io import TextIOWrapper,BytesIO
+import chardet
+import os 
 
 
 
@@ -57,50 +60,145 @@ def user_logout(request):
 
 def file_list(request):
     if request.user.is_authenticated:
-      files = FileUpload.objects.filter(user=request.user)
+      files = Company.objects.filter(user=request.user)
       return render(request, 'file_list.html', {'files': files})
     else:
         return render(request,'login.html')
 
 def file_upload(request):
-    if request.method == 'POST' and 'file' in request.FILES:
+    if request.method == 'POST' and request.FILES['file']:
         file = request.FILES['file']
-        FileUpload.objects.create(user=request.user, file=file)
+        
+        # Check if the file is a CSV
+        if not file.name.endswith('.csv'):
+            return HttpResponseNotAllowed(['POST'])
+
+        # Define a temporary file path on the U drive
+        upload_dir = 'U:/django/catalyst_count/media/uploads'
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+        
+        destination = os.path.join(upload_dir, file.name)
+
+        # Write the uploaded file to the destination file
+        with open(destination, 'wb+') as destination_file:
+            for chunk in file.chunks():
+                destination_file.write(chunk)
+
+        # Process the uploaded CSV file
+        with open(destination, 'r', encoding='utf-8') as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                # Extract data from each row and create a new Company instance
+                locality = row.get('locality', '')
+                if locality:
+                    city_state = locality.split(',')[:2]
+                    city = city_state[0].strip() if len(city_state) > 0 else 'Unknown'
+                    state = city_state[1].strip() if len(city_state) > 1 else 'Unknown'
+                else:
+                    city = 'Unknown'
+                    state = 'Unknown'
+
+                # Convert year founded to integer
+                try:
+                    year_founded = int(float(row.get('year founded', 0)))
+                except ValueError:
+                    year_founded = 2021  # default year if conversion fails  
+                
+                Company.objects.create(
+                    user=request.user,
+                     name=row.get('name', 'Unknown'),
+                    domain=row.get('domain', 'Unknown'),
+                    year=year_founded,
+                    industry=row.get('industry', 'UNKNOWN'),
+                    size_range=row.get('size range', 'Unknown'),
+                    city=city,
+                    state=state,
+                    country=row.get('country', 'Unknown'),
+                    linkedin_url=row.get('linkedin url', 'Unknown'),
+                    current_employee_estimate=row.get('current employee estimate'),
+                    total_employee_estimate=row.get('total employee estimate')
+                )
+
+        # Delete the temporary file after processing
+        os.remove(destination)
+
+        # Redirect to file_list after processing
         return redirect('file_list')
+
+    # If request is not POST or file is not present, return method not allowed
     return HttpResponseNotAllowed(['POST'])
 
-def file_delete(request, pk):
-    file = get_object_or_404(FileUpload, pk=pk, user=request.user)
-    if request.method == 'POST':
-        file.delete()
-        return redirect('file_list')
-    return HttpResponseNotAllowed(['POST'])
+
+def query_builder(request):
+        # Get the parameters from the request.POST
+        # keyword = request.GET.get('keyword')
+        industry = request.GET.get('industry')
+        year = request.GET.get('year')
+        city = request.GET.get('city')
+        state = request.GET.get('state')
+        country = request.GET.get('country')
+        employees_from = request.GET.get('employees_from')
+        employees_to = request.GET.get('employees_to')
+
+        # Start with all companies
+        companies = Company.objects.all()
+
+        # Apply filters based on the parameters
+        # if keyword:
+        #     companies = companies.filter(name__icontains=keyword)
+        if industry:
+            companies = companies.filter(industry__icontains=industry)
+        if year:
+            companies = companies.filter(year=year)
+        if city:
+            companies = companies.filter(city__icontains=city)
+        if state:
+            companies = companies.filter(state__icontains=state)
+        if country:
+            companies = companies.filter(country__icontains=country)
+        if employees_from:
+            companies = companies.filter(employees__gte=employees_from)
+        if employees_to:
+            companies = companies.filter(employees__lte=employees_to)
+
+        # Render the results
+        count = companies.count()
+        return render(request, 'query_builder.html',{'count':count})
+
+
+# def file_delete(request, pk):
+#     file = get_object_or_404(Company, pk=pk, user=request.user)
+#     if request.method == 'POST':
+#         file.delete()
+#         return redirect('file_list')
+#     return HttpResponseNotAllowed(['POST'])
 
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def api_file_list(request):
-    files = FileUpload.objects.filter(user=request.user)
-    serializer = FileUploadSerializer(files, many=True)
-    return Response(serializer.data)
+# @api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+# def api_file_list(request):
+#     files = Company.objects.filter(user=request.user)
+#     serializer = CompanySerializer(files, many=True)
+#     return Response(serializer.data)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_file_upload(request):
     if 'file' in request.FILES:
         file = request.FILES['file']
-        file_upload = FileUpload.objects.create(user=request.user, file=file)
-        serializer = FileUploadSerializer(file_upload)
+        file_upload = Company.objects.create(user=request.user, file=file)
+        serializer = CompanySerializer(file_upload)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response({'error': 'File not provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
-def api_file_delete(request, pk):
-    file = get_object_or_404(FileUpload, pk=pk, user=request.user)
-    file.delete()
-    return Response(status=status.HTTP_204_NO_CONTENT)
+# @api_view(['DELETE'])
+# @permission_classes([IsAuthenticated])
+# def api_file_delete(request, pk):
+#     file = get_object_or_404(Company, pk=pk, user=request.user)
+#     file.delete()
+#     return Response(status=status.HTTP_204_NO_CONTENT)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

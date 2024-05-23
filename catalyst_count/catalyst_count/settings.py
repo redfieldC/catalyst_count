@@ -140,3 +140,10 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Increase the default file upload size limit
 DATA_UPLOAD_MAX_MEMORY_SIZE = 1048576000  # 1 GB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 1048576000  # 1 GB
+
+UPLOAD_TEMP_DIR='U:/django/catalyst_count/media/uploads' 
+
+if not os.path.exists(UPLOAD_TEMP_DIR):
+    os.makedirs(UPLOAD_TEMP_DIR)
+
+FILE_UPLOAD_TEMP_DIR = UPLOAD_TEMP_DIR
